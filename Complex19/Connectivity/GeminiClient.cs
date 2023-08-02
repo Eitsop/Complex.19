@@ -36,31 +36,33 @@ namespace Complex19.Connectivity
             while( client.Connected )
             {
                 var bytesReceived = sslStream.Read(rxBuffer, totalBytesReceived, ConnectivityConstants.ReceiveBufferSize - totalBytesReceived);
-                totalBytesReceived += bytesReceived;
+
                 if ( bytesReceived > 0 )
                 {
-                    Debug.WriteLine(totalBytesReceived.ToString());
                     var crlfIndex = rxBuffer.LocateFirst( ConnectivityConstants.CRLFByteSequence );
                     if( response == null )
                     {
-                        if( crlfIndex >=0 )
+                        if ( crlfIndex >=0 )
                         {
+                            totalBytesReceived += bytesReceived;
+                            if( totalBytesReceived > ConnectivityConstants.ReceiveBufferSize )
+                            {
+                                throw new InvalidDataException();
+                            }
                             var statusLineParser = _statusLineParserFactory.CreateParser( request, rxBuffer.Take( crlfIndex ) );
                             response = statusLineParser.Parse();
                             if( response != null )
                             {
-                                response.Content.Write(rxBuffer.Skip(crlfIndex + ConnectivityConstants.CRLFByteSequence.Length + 1).ToArray());
+                                var contentStart = crlfIndex + ConnectivityConstants.CRLFByteSequence.Length;
+                                var contentBytes = rxBuffer.Skip(contentStart).Take(totalBytesReceived - contentStart).ToArray();
+                                response.Content.Write(contentBytes);
+                                totalBytesReceived = 0;
                             }
                         }
                     }
                     else
                     {
                         response.Content.Write(rxBuffer, 0, bytesReceived);
-                    }
-
-                    if( response != null )
-                    {
-                        totalBytesReceived = 0;
                     }
                 }
                 else 
